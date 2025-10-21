@@ -9,12 +9,20 @@ if [[ -z "$file" ]]; then
   exit 2
 fi
 
-awk -F',' '
+[[ -f "$file" ]] || { echo "ERROR: file not found: $file" >&2; exit 2; }
+if ! head -n1 "$file" | grep -qE '(^|,)"?tax"?($|,)'; then
+  echo "ERROR: No 'tax' column in header" >&2
+  exit 1
+fi
+
+LC_ALL=C awk -F',' '
 BEGIN { OFS=","; t=0 }
 
 NR==1 {
+  sub(/\r$/, "", $0)
   for (i=1; i<=NF; i++) {
     h = $i
+    gsub(/^ +| +$/, "", h)
     gsub(/^"|"$/, "", h)
     if (h == "tax") { t = i; break }
   }
@@ -24,10 +32,18 @@ NR==1 {
 }
 
 {
+  sub(/\r$/, "", $0)
   val = $t
-  if (val ~ /^0(\.[0-9]{1,2})?$/ || val ~ /^1(\.0{1,2})?$/) {
+  gsub(/^ +| +$/, "", val)
+  gsub(/^"|"$/, "", val)
+  if (val ~ /^(100|[1-9]?[0-9])%$/) {
+  } else if (val ~ /^0(\.[0-9]{1,2})?$/ || val ~ /^1(\.0{1,2})?$/) {
     $t = sprintf("%.0f", val * 100) "%"
+  } else {
+    $t = "N/A"
   }
+
   print $0
 }
 ' "$file" > "$out"
+BASH 
